@@ -1,19 +1,3 @@
-/*
-   Copyright 2014 Outbrain Inc.
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-*/
-
 // zk provides with higher level commands over the lower level zookeeper connector
 package zk
 
@@ -62,6 +46,27 @@ func (zook *ZooKeeper) SetAuth(scheme string, auth []byte) {
 	log.Debug("Setting Auth ")
 	zook.authScheme = scheme
 	zook.authExpression = auth
+}
+
+// SetFlags sets the Ephemeral flag (1)
+func (zook *ZooKeeper) SetEphemeral() {
+	zook.SetFlags(1)
+}
+
+// SetSequencial sets the Sequence flag (2)
+func (zook *ZooKeeper) SetSequencial() {
+	zook.SetFlags(2)
+}
+
+// SetFlags allows setting None (0) Ephemeral (1) or Sequencial Values (2)
+func (zook *ZooKeeper) SetFlags(flagVal int32) {
+	match := true
+	switch match {
+	case flagVal > 2 || flagVal < 0:
+		zook.flags = 0
+	default:
+		zook.flags = flagVal
+	}
 }
 
 // Returns acls
@@ -170,6 +175,17 @@ func (zook *ZooKeeper) aclsToString(acls []zk.ACL) (result []string) {
 	return result
 }
 
+func (zook *ZooKeeper) HasChildren(path string) (bool, error) {
+	connection, err := zook.connect()
+	if err != nil {
+		return true, err
+	}
+	defer connection.Close()
+
+	children, _, err := connection.Children(path)
+	return (len(children) > 0), err
+}
+
 // Children returns sub-paths of given path, optionally empty array, or error if path does not exist
 func (zook *ZooKeeper) Children(path string) ([]string, error) {
 	connection, err := zook.connect()
@@ -239,7 +255,7 @@ func (zook *ZooKeeper) createInternal(connection *zk.Conn, path string, data []b
 			if parentPath == path {
 				return returnValue, err
 			}
-			returnValue, err = zook.createInternal(connection, parentPath, []byte("zookeepercli auto-generated"), acl, force)
+			returnValue, err = zook.createInternal(connection, parentPath, []byte("recurse auto-generated"), acl, force)
 		} else {
 			return returnValue, err
 		}
@@ -400,7 +416,6 @@ func (zook *ZooKeeper) Delete(path string) error {
 		return err
 	}
 	defer connection.Close()
-
 	return connection.Delete(path, -1)
 }
 
@@ -410,13 +425,11 @@ func (zook *ZooKeeper) DeleteRecursive(path string) error {
 	if err != nil {
 		log.Fatale(err)
 	}
-
 	for i := len(result) - 1; i >= 0; i-- {
 		znode := path + "/" + result[i]
 		if err = zook.Delete(znode); err != nil {
 			log.Fatale(err)
 		}
 	}
-
 	return zook.Delete(path)
 }
