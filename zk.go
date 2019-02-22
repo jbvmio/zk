@@ -6,20 +6,25 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	gopath "path"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/outbrain/golib/log"
+	log "github.com/sirupsen/logrus"
+	//"github.com/outbrain/golib/log"
 	"github.com/samuel/go-zookeeper/zk"
 )
+
+const defaultTimestampFormat = time.RFC3339
 
 type ZooKeeper struct {
 	servers        []string
 	authScheme     string
 	authExpression []byte
+	logger         *log.Logger
 	logging        bool
 
 	// We assume complete access to all
@@ -28,9 +33,16 @@ type ZooKeeper struct {
 }
 
 func NewZooKeeper() *ZooKeeper {
+	logger := log.New()
+	logger.Out = os.Stdout
+	logger.Formatter = &log.TextFormatter{
+		TimestampFormat: defaultTimestampFormat,
+		FullTimestamp:   true,
+	}
 	return &ZooKeeper{
-		flags: int32(0),
-		acl:   zk.WorldACL(zk.PermAll),
+		flags:  int32(0),
+		acl:    zk.WorldACL(zk.PermAll),
+		logger: logger,
 	}
 }
 
@@ -83,11 +95,12 @@ func (zook *ZooKeeper) BuildACL(authScheme string, user string, pwd string, acls
 	return perms, err
 }
 
+/*
 type infoLogger struct{}
-
 func (_ infoLogger) Printf(format string, a ...interface{}) {
 	log.Infof(format, a...)
 }
+*/
 
 // connect
 func (zook *ZooKeeper) connect() (*zk.Conn, error) {
@@ -97,6 +110,9 @@ func (zook *ZooKeeper) connect() (*zk.Conn, error) {
 		conn, _, errd = zk.Connect(zook.servers, time.Second, zk.WithLogInfo(true))
 	} else {
 		conn, _, errd = zk.Connect(zook.servers, time.Second, zk.WithLogInfo(false))
+	}
+	if errd == nil {
+		conn.SetLogger(zook.logger)
 	}
 	if errd == nil && zook.authScheme != "" {
 		log.Debugf("Add Auth %s %s", zook.authScheme, zook.authExpression)
@@ -423,12 +439,12 @@ func (zook *ZooKeeper) Delete(path string) error {
 func (zook *ZooKeeper) DeleteRecursive(path string) error {
 	result, err := zook.ChildrenRecursive(path)
 	if err != nil {
-		log.Fatale(err)
+		log.Fatalln(err)
 	}
 	for i := len(result) - 1; i >= 0; i-- {
 		znode := path + "/" + result[i]
 		if err = zook.Delete(znode); err != nil {
-			log.Fatale(err)
+			log.Fatalln(err)
 		}
 	}
 	return zook.Delete(path)
