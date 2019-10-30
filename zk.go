@@ -104,21 +104,15 @@ func (_ infoLogger) Printf(format string, a ...interface{}) {
 
 // connect
 func (zook *ZooKeeper) connect() (*zk.Conn, error) {
-	var conn *zk.Conn
-	var errd error
-	if zook.logging {
-		conn, _, errd = zk.Connect(zook.servers, time.Second, zk.WithLogInfo(true))
-	} else {
-		conn, _, errd = zk.Connect(zook.servers, time.Second, zk.WithLogInfo(false))
+	conn, _, errd := zk.Connect(zook.servers, time.Second, zk.WithLogInfo(zook.logging))
+	if errd != nil {
+		return conn, fmt.Errorf("error on connect: %v", errd)
 	}
-	if errd == nil {
-		conn.SetLogger(zook.logger)
-	}
-	if errd == nil && zook.authScheme != "" {
+	conn.SetLogger(zook.logger)
+	if zook.authScheme != "" {
 		log.Debugf("Add Auth %s %s", zook.authScheme, zook.authExpression)
 		errd = conn.AddAuth(zook.authScheme, zook.authExpression)
 	}
-
 	return conn, errd
 }
 
